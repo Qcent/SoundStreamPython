@@ -1,0 +1,2 @@
+pyaudiowpatch==0.2.12.6
+pydub==0.25.1
