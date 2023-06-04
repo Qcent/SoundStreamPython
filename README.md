@@ -10,11 +10,11 @@
  Ensure that ffmpeg is installed on your system and the `ffmpeg.exe` file is accessible in your system's PATH environment variable, or place this file in the working directory of Qsound.
 ## Usage
  To use Qsound, follow these steps:
- 1. Ensure that ffmpeg.exe is accessible in your system's PATH environment variable, or in the working directory of Qsound.
- 2. Make sure you have Python installed on your Windows machine.
- 3. Clone this repository from GitHub.
- 4. Install the required dependencies by running the following command: \
+ 1. Make sure you have Python installed on your Windows machine.
+ 2. Clone this repository from GitHub.
+ 3. Install the required dependencies by running the following command: \
   `pip install -r requirements.txt`
+ 4. Ensure that ffmpeg.exe is accessible in your system's PATH environment variable, or placed in the working directory of Qsound.
  5. Run the Qsound script using the following command: \
   `python Qsound.py [-n HOST] [-p PORT] [-m MODE]`
   
