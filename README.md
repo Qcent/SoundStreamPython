@@ -6,8 +6,18 @@
 - **Basic Compression**: The captured audio is compressed using ffmpeg and the mp3 compression algorithm to "*optimize*" data transmission.
 - **TCP Streaming**: Qsound establishes a TCP connection between the client and server, enabling the "*seamless*" transfer of the compressed audio stream.
 
+## Requirements
+ Ensure that ffmpeg is installed on your system and the `ffmpeg.exe` file is accessible in your system's PATH environment variable, or place this file in the working directory of Qsound.
 ## Usage
- `python Qsound.py [-n HOST] [-p PORT] [-m MODE]`
+ To use Qsound, follow these steps:
+ 1. Ensure that ffmpeg.exe is accessible in your system's PATH environment variable, or in the working directory of Qsound.
+ 2. Make sure you have Python installed on your Windows machine.
+ 3. Clone this repository from GitHub.
+ 4. Install the required dependencies by running the following command: \
+  `pip install -r requirements.txt`
+ 5. Run the Qsound script using the following command: \
+  `python Qsound.py [-n HOST] [-p PORT] [-m MODE]`
+  
 ### Arguments
  The script accepts the following arguments:
 
@@ -35,7 +45,7 @@
     python Qsound.py -n 192.168.0.100 -p 8000 -m 2 
 
 ## Notes
- *Python may not be the ideal language for such an application, the program is only able to capture ~60-88 percent of the sound on my machine and I surmise it is spending the rest of the time compressing and  sending the data. I have experimented with threading and async functions, but both routes have only decreased performance so far. And as such, I continue to search for a more direct audio capture to socket-write   capable architecture 
+ *Python may not be the ideal language for such an application, the program is only able to capture ~60-88 percent of the sound on my machine and I surmise it is spending the rest of the time compressing and  sending the data. I have experimented with threading and async functions, but both routes have only decreased performance so far. And as such, I continue to search for a more direct audio capture to socket-write capable architecture 
   
  *Default port is 5000 \
  *Default host is 127.0.0.1 \
