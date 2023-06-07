@@ -1,4 +1,3 @@
-import queue
 from pydub import AudioSegment
 from io import BytesIO
 
@@ -7,71 +6,58 @@ RATE = 48000
 
 class AudioBuffer:
     def __init__(self, frame_rate=RATE, sample_width=2, channels=2):
-        self.buffer = queue.Queue()
+        self.buffer = b""
         self.frame_rate = frame_rate
         self.sample_width = sample_width
         self.channels = channels
+        self.length = 0
 
     def add_data(self, data):
-        self.buffer.put(data)
+        self.buffer += data
+        self.length += len(data)
 
-    def retrieve_data(self):
-        if not self.buffer.empty():
-            return self.buffer.get()
+    def retrieve_data(self, length=None):
+        if length is None:
+            data = self.buffer
+            self.buffer = b""
+            self.length = 0
         else:
-            return None
+            data = self.buffer[:length]
+            self.buffer = self.buffer[length:]
+            self.length -= length
+
+        return data
 
     def clear(self):
-        self.buffer.queue.clear()
+        self.buffer = b""
+        self.length = 0
 
     def get_size(self):
-        return self.buffer.qsize()
+        return self.length
 
     def truncate(self, length):
-        items_to_remove = self.buffer.qsize() - length
-        if items_to_remove > 1:
-            for _ in range(items_to_remove):
-                self.buffer.get()
-
-    def read_buffer_as_bytes(self, length=1):
-        buffer_list = []
-        for _ in range(length):
-            buffer_list.append(self.buffer.get())
-        bytes_array = b''.join(buffer_list)
-        return bytes_array
+        self.buffer = self.buffer[:length]
+        self.length = length
 
     def get_buffer_as_bytes(self, length=None):
-        buffer_list = list(self.buffer.queue)
-        bytes_array = b''.join(buffer_list)
-        if length is not None:
-            bytes_array = bytes_array[:length]
+        if length is None:
+            bytes_array = self.buffer
+        else:
+            bytes_array = self.buffer[:length]
         return bytes_array
 
-    def to_mp3_data(self, bitrate=None):
+    def convert_pcm_to_mp3(self, pcm_data, bitrate='320'):
         # Create AudioSegment from buffer
         audio_segment = AudioSegment(
-            self.get_buffer_as_bytes(),
+            pcm_data,
             frame_rate=self.frame_rate,
-            sample_width=2,
-            channels=2
+            sample_width=self.sample_width,
+            channels=self.channels
         )
         # Convert the WAV audio segment to MP3 format
         mp3_data = audio_segment.export(format='mp3', bitrate=bitrate)
 
-        return mp3_data.read()
-
-    def to_mp3_segment(self,  bitrate=None):
-        # Create AudioSegment from buffer
-        audio_segment = AudioSegment(
-            self.get_buffer_as_bytes(),
-            frame_rate=self.frame_rate,
-            sample_width=2,
-            channels=2
-        )
-        # Convert the WAV audio segment to MP3 format
-        mp3_data = audio_segment.export(format='mp3', bitrate=bitrate)
-        # Convert mp3 data to AudioSegment
-        return AudioSegment.from_file(BytesIO(mp3_data.read()), format='wav')
+        return mp3_data.read(), audio_segment
 
     @staticmethod
     def mp3_data_to_pcm(mp3_data):
@@ -82,15 +68,15 @@ class AudioBuffer:
     def convert_to_audio_segment(audio_data, frame_rate=RATE, sample_width=2, channels=2):
         audio_segment = AudioSegment(
             audio_data,
-            frame_rate=frame_rate,  # Replace with your sample rate
-            sample_width=sample_width,  # Replace with your sample width in bytes (2 for paInt16)
-            channels=channels,  # Replace with your number of channels
+            frame_rate=frame_rate,
+            sample_width=sample_width,
+            channels=channels
         )
         return audio_segment
 
     @staticmethod
-    def mp3_segment_to_pcm(mp3_segment):
-        return mp3_segment.raw_data
+    def segment_to_pcm(segment):
+        return segment.raw_data
 
     @staticmethod
     def get_audio_length(audio_data, audio_format='wav'):
@@ -99,11 +85,11 @@ class AudioBuffer:
         return duration
 
     @staticmethod
-    def speed_change(sound, speed=1.0):
+    def speed_change(segment, speed=1.0):
         # Manually override the frame_rate to speed or slow audio segments
-        sound_with_altered_frame_rate = sound._spawn(sound.raw_data, overrides={
-            "frame_rate": int(sound.frame_rate * speed)
+        sound_with_altered_frame_rate = segment._spawn(segment.raw_data, overrides={
+            "frame_rate": int(segment.frame_rate * speed)
         })
 
         # Convert the sound with altered frame rate back to original frame rate
-        return sound_with_altered_frame_rate.set_frame_rate(sound.frame_rate)
+        return sound_with_altered_frame_rate.set_frame_rate(segment.frame_rate)
