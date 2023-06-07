@@ -1,4 +1,5 @@
-import pyaudio
+# import pyaudio
+import pyaudiowpatch as pyaudio
 import networking
 import threading
 import time
@@ -30,12 +31,11 @@ audio = pyaudio.PyAudio()
 
 # Create a buffer to store the received audio data
 audio_buffer = AudioBuffer(frame_rate=RATE, channels=CHANNELS)
-
 save_buffer = AudioBuffer(frame_rate=RATE, channels=CHANNELS)
 
 
 # test function to write received audio data to an mp3 file
-def save_audio(audio_data, file_name='test'):
+def save_audio(audio_data, file_name='test', passed_length=0):
     # Create an AudioSegment from audio_buffer
     audio_segment = AudioSegment(
         audio_data.get_buffer_as_bytes(),
@@ -45,7 +45,9 @@ def save_audio(audio_data, file_name='test'):
     )
     total_audio_length = audio_segment.duration_seconds
     print(f'In just {total_time:.2f} seconds')
-    print(f'Decoded Audio Length of: {total_audio_length:.2f} seconds')
+    print(f'Actual Received Audio Length: {passed_length:.2f} seconds')
+    print(f'Corrected Audio to Length: {total_audio_length:.2f} seconds')
+    print(f'Ratio:{passed_length/total_audio_length:.4f}')
 
     # Calc time stretch factor
     # time_factor = total_audio_length / total_time
@@ -71,7 +73,7 @@ def receive_audio_loop(conn):
         ## mp3_segment = audio_buffer.mp3_data_to_segment(data)
         # print(f'audio sample length: {mp3_segment.duration_seconds:.2f} seconds')
         # Convert to PCM and add to buffer
-        ## audio_buffer.add_data(audio_buffer.mp3_segment_to_pcm(mp3_segment))
+        ## audio_buffer.add_data(audio_buffer.segment_to_pcm(mp3_segment))
 
         # Add received pcm data to buffer
         audio_buffer.add_data(data)
@@ -108,66 +110,84 @@ def start_receiver_noThread(conn):
     conn.receive_data()
     current_sample_time_start = time.time()
     while total_reported_length < 42:
-        meta_data, sound_sample = conn.receive_data()  # receive_audio__old(conn)
-        meta_length = float(meta_data['length'])
-        current_reported_length += meta_length
-        total_reported_length += meta_length
+        # retrieve data from connection with header data
+        meta_data, received_audio_data = conn.receive_data()
+        if received_audio_data:
+            meta_length = float(meta_data['length'])
+            current_reported_length += meta_length
+            total_reported_length += meta_length
 
-        sound_data = audio_buffer.convert_to_audio_segment(sound_sample)
+            # Decode from MP3
+            # pcm_sound = AudioBuffer.mp3_data_to_pcm(received_audio_data)
+            # sound_seg = AudioBuffer.convert_to_audio_segment(pcm_sound)
 
-        sound_data_length = sound_data.duration_seconds
-        total_produced_length += sound_data_length
-        #stretch_factor = meta_length / sound_data_length
-        audio_buffer.add_data(audio_buffer.mp3_segment_to_pcm(sound_data))
-        # audio_buffer.add_data(audio_buffer.speed_change(sound_data, stretch_factor).raw_data)
+            # RAW PCM
+            sound_seg = audio_buffer.convert_to_audio_segment(received_audio_data)
 
-        loop_count += 1
-        fps = do_fps_counting(36)
-        if fps:
-            print(f'Samples Received: {loop_count} In {fps} seconds')
+            # For Sender based time adjustments
+            sound_data_length = sound_seg.duration_seconds
+            total_produced_length += sound_data_length
+            stretch_factor = meta_length / sound_data_length
 
-        buff_size = audio_buffer.get_size()
-        if buff_size < 8:
-            #if play:
-                #print('<< STOPPED >>')
-            play = False
-        if buff_size > 12:
-            play = True
-            #print('\t << PLAY >>')
-            if buff_size > 32:
-                print('\t    << TRUNCATE >>')
-                audio_buffer.truncate(8)
-        if play:
-            pcm_sound = audio_buffer.read_buffer_as_bytes(8)
-            # save_buffer.add_data(pcm_sound)
-            # stream.write(pcm_sound)
-            now_time = time.time()
-            experienced_time = now_time - current_sample_time_start
+            # pre buffer processing
+            # audio_buffer.add_data(audio_buffer.speed_change(sound_seg, stretch_factor).raw_data)
+            audio_buffer.add_data(received_audio_data)
 
-            current_sample_time_start = now_time
+            loop_count += 1
+            fps = do_fps_counting(100)
+            if fps:
+                print(f'Samples Received: {loop_count} In {fps} seconds')
 
-            sound_seg = audio_buffer.convert_to_audio_segment(pcm_sound)
+            buff_size = audio_buffer.length
+            if buff_size < CHUNK_SIZE:
+                if play:
+                    print('<< STOPPED >>')
+                play = False
+            if buff_size > CHUNK_SIZE:
+                play = True
+                #print('\t << PLAY >>')
+                if buff_size > CHUNK_SIZE * 32:
+                    print('\t    << TRUNCATE >>')
+                    audio_buffer.truncate(CHUNK_SIZE//2)
+            if play:
+                pcm_sound = audio_buffer.retrieve_data(buff_size - CHUNK_SIZE//2)
 
-            print(f'experienced time: {experienced_time:.2f}s  \
-            reported time: {current_reported_length}s \
-            decoded time: {sound_seg.duration_seconds}s ')
-            stretch_factor = sound_seg.duration_seconds / current_reported_length
-            print(f'stretch factor: {stretch_factor:.3f}')
+                # save_buffer.add_data(pcm_sound)
+                # stream.write(pcm_sound)
 
-            current_reported_length = 0
-            save_buffer.add_data(audio_buffer.speed_change(sound_seg, max(stretch_factor, .85)).raw_data)
+                # local timing
+                now_time = time.time()
+                experienced_time = now_time - current_sample_time_start
+                current_sample_time_start = now_time
 
-            '''conn.client_socket.close()
-            print(f'Finished Receiving, Now Saving')
-            save_audio(audio_buffer, 'new_test')
-            exit()
-            '''
+                sound_seg = audio_buffer.convert_to_audio_segment(pcm_sound)
+
+                if loop_count % 10 == 0:
+                    print(f'experienced time: {experienced_time:.5f}s  \
+                    reported time: {current_reported_length}s \
+                    decoded time: {sound_seg.duration_seconds}s ')
+
+                if current_reported_length > sound_seg.duration_seconds:
+                    stretch_factor = sound_seg.duration_seconds / current_reported_length
+                    save_buffer.add_data(audio_buffer.speed_change(sound_seg, stretch_factor).raw_data)
+                else:
+                    stretch_factor = 1
+                    save_buffer.add_data(pcm_sound)
+
+                #print(f'playback speed factor: {stretch_factor:.3f}')
+
+                current_reported_length = 0
+
     # clear the buffer
     pcm_sound = audio_buffer.get_buffer_as_bytes()
     save_buffer.add_data(pcm_sound)
+    sound_seg = audio_buffer.convert_to_audio_segment(pcm_sound)
+    sound_data_length = sound_seg.duration_seconds
+    do_fps_counting(report_frequency=-1)
     print(f'Clearing {len(pcm_sound)/1024:.2f} Kbytes from buffer')
-    print(f'Received Reported Audio Length of: {total_reported_length:.2f} seconds')
-    save_audio(save_buffer, 'speed_adjust')
+    print(f'Representing {sound_data_length:.5f}s of audio')
+    print(f'Received Reported Total Audio Length of: {total_reported_length+sound_data_length:.2f} seconds')
+    save_audio(save_buffer, 'speed_adjust', total_produced_length)
 
 
 def start_receiver_withThread(conn):
@@ -198,3 +218,4 @@ def start_receiver_withThread(conn):
             print(f'Finished Receiving, Now Saving')
             save_audio('new_test')
             exit()
+            
