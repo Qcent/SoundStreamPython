@@ -9,9 +9,9 @@ fps_counter = FPSCounter()
 
 
 # call do_fps_counting in main loop
-def do_fps_counting():
+def do_fps_counting(freq=30):
     fps_counter.increment_frame_count()
-    if fps_counter.frame_count > 10:
+    if fps_counter.frame_count > freq:
         fps = fps_counter.get_fps()
         tt = fps_counter.get_elapsed_time()
         fps_counter.reset()
@@ -21,7 +21,7 @@ def do_fps_counting():
 # Audio settings
 FORMAT = pyaudio.paInt16
 CHUNK_SIZE = networking.CHUNK_SIZE
-BITRATE = 'vbr'
+BITRATE = '128'
 
 payload_size = networking.PAYLOAD_SIZE
 
@@ -36,7 +36,7 @@ def capture_and_send_audio(conn):
 
     audio_buffer = AudioBuffer(frame_rate=RATE,
                                sample_width=pyaudio.get_sample_size(FORMAT),
-                               channels=sound_device["maxInputChannels"]
+                               channels=1 # sound_device["maxInputChannels"]
                                )
 
     def audio_capture_callback(in_data, frame_count, time_info, status):
@@ -45,7 +45,7 @@ def capture_and_send_audio(conn):
         return in_data, pyaudio.paContinue
 
     def send_audio(data, sound_length):
-        conn.send_data(data, header={
+        return conn.send_data(data, header={
             "length": f"{sound_length:.5f}",
         })
 
@@ -66,35 +66,32 @@ def capture_and_send_audio(conn):
         while True:
             # Read audio data from the stream
             #  #audio_capture_callback() will add audio data to buffer
-            audio_buffer_size = audio_buffer.get_size()
-            # Send the audio data over the socket
-            if audio_buffer_size * payload_size >= CHUNK_SIZE*2:
-                # print(f'Compressing {audio_buffer_size*payload_size / 1024:.2f} kB')
-                ##out = audio_buffer.to_mp3_data(bitrate=BITRATE)
-                ##audio_buffer.clear()
 
+            # Send the audio data over the socket
+            if audio_buffer.length >= CHUNK_SIZE * 12:
+                # timing stuff
                 time_now = time.time()
                 sound_length = time_now - sound_start
                 sound_start = time_now
-                out = audio_buffer.read_buffer_as_bytes(audio_buffer_size)
+                # grab the audio buffer
+                out = audio_buffer.retrieve_data(audio_buffer.length)
+                # Convert to mp3
+                # mp3_data, sound_seg = audio_buffer.convert_pcm_to_mp3(out, BITRATE)
 
-                send_audio(audio_buffer.convert_to_audio_segment(out).raw_data, sound_length)
+                if not send_audio(out, sound_length):
+                    break
 
-                # create a thread for sending data
-                #send_data_thread = threading.Thread(target=send_audio, args=(conn, sound_length))
-                #send_data_thread.start()
+                sound_seg = audio_buffer.convert_to_audio_segment(out)
+                running_sample_length += sound_seg.duration_seconds
 
-
-                sample_length = audio_buffer.convert_to_audio_segment(out).duration_seconds
-                running_sample_length += sample_length
-
-                # print(f'Compressed size:{len(out)}')
-
-                fps = do_fps_counting()
+                fps = do_fps_counting(15)
                 if fps:
                     print(fps)
                     print(f'produced an audio sample of {running_sample_length:.4f}s')
                     running_sample_length = 0
+
+        conn.close_connection()
+        audio.close(stream)
 
 
 # Function to capture and send audio data with separate threads for each
