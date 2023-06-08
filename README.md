@@ -45,7 +45,7 @@
     python Qsound.py -n 192.168.0.100 -p 8000 -m 2 
 
 ## Notes
- *Python may not be the ideal language for such an application, the program is only able to capture ~60-88 percent of the sound on my machine and I surmise it is spending the rest of the time compressing and  sending the data. I have experimented with sunprocesses, threading and async functions, but all routes have only decreased performance so far. And as such, I continue to search for a more direct audio capture to socket-write capable architecture 
+ *Python may not be the ideal language for such an application, the program is only able to capture ~60-88 percent of the sound on my machine and I surmise it is spending the rest of the time compressing and  sending the data. I have experimented with subprocesses, threading and async functions, but all routes have only decreased performance so far. And as such, I continue to search for a more direct audio capture to socket-write capable architecture 
   
  *Default port is 5000 \
  *Default host is 127.0.0.1 \
